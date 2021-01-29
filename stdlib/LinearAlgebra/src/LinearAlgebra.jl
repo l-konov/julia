@@ -433,21 +433,50 @@ function versioninfo(io::IO=stdout)
     println(io, "LAPACK: ",Base.liblapack_name)
 end
 
-function __init__()
-    try
-        BLAS.check()
-        if BLAS.vendor() === :mkl
-            ccall((:MKL_Set_Interface_Layer, Base.libblas_name), Cvoid, (Cint,), USE_BLAS64 ? 1 : 0)
-        end
-        Threads.resize_nthreads!(Abuf)
-        Threads.resize_nthreads!(Bbuf)
-        Threads.resize_nthreads!(Cbuf)
-    catch ex
-        Base.showerror_nostdio(ex,
-            "WARNING: Error during initialization of module LinearAlgebra")
+function get_blas_lapack_path()
+    shlib_ext = if Sys.iswindows()
+         ".dll"
+    elseif Sys.isapple()
+         ".dylib"
+    else
+         ".so"
     end
-    # register a hook to disable BLAS threading
-    Base.at_disable_library_threading(() -> BLAS.set_num_threads(1))
+    libblas_path = joinpath(Sys.BINDIR, Base.LIBDIR, "julia", string(Base.libblas_name, shlib_ext))
+    if !isfile(libblas_path)
+        libblas_path = joinpath(Sys.BINDIR, Base.LIBDIR, string(Base.libblas_name, shlib_ext))
+        if !isfile(libblas_path)
+            error("Cannot find BLAS at ", libblas_path)
+        end
+    end
+    liblapack_path = joinpath(Sys.BINDIR, Base.LIBDIR, "julia", string(Base.liblapack_name, shlib_ext))
+    if !isfile(liblapack_path)
+        liblapack_path = joinpath(Sys.BINDIR, Base.LIBDIR, string(Base.liblapack_name, shlib_ext))
+        if !isfile(liblapack_path)
+            error("Cannot find LAPACK at ", liblapack_path)
+        end
+    end
+
+    return (libblas_path, liblapack_path)
+end
+
+function __init__()
+     try
+         libblas_path, liblapack_path = get_blas_lapack_path()
+         ccall((:load_blas_funcs, "libblastrampoline"), Cvoid, (Cstring,Cint,Cint), libblas_path,   1, 0)
+         ccall((:load_blas_funcs, "libblastrampoline"), Cvoid, (Cstring,Cint,Cint), liblapack_path, 0, 0)
+# 	 BLAS.check()
+#        if BLAS.vendor() === :mkl
+#            ccall((:MKL_Set_Interface_Layer, Base.libblas_name), Cvoid, (Cint,), USE_BLAS64 ? 1 : 0)
+#        end
+#        Threads.resize_nthreads!(Abuf)
+#        Threads.resize_nthreads!(Bbuf)
+#        Threads.resize_nthreads!(Cbuf)
+     catch ex
+         Base.showerror_nostdio(ex,
+             "WARNING: Error during initialization of module LinearAlgebra")
+     end
+     # register a hook to disable BLAS threading
+     Base.at_disable_library_threading(() -> BLAS.set_num_threads(1))
 end
 
 end # module LinearAlgebra

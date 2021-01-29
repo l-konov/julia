@@ -6,7 +6,7 @@ Interface to BLAS subroutines.
 module BLAS
 
 import ..axpy!, ..axpby!
-import Base: copyto!
+import Base: copyto!, USE_BLAS64
 using Base: require_one_based_indexing
 
 export
@@ -63,8 +63,8 @@ export
     trsm
 
 
-const libblas = Base.libblas_name
-const liblapack = Base.liblapack_name
+const libblas = "libblastrampoline"
+const liblapack = "libblastrampoline"
 
 import LinearAlgebra
 import LinearAlgebra: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatch, checksquare, stride1, chkstride1, axpy!
@@ -94,7 +94,7 @@ end
 const _vendor = determine_vendor()
 vendor() = _vendor
 
-if vendor() === :openblas64
+if USE_BLAS64
     macro blasfunc(x)
         return Expr(:quote, Symbol(x, "64_"))
     end
